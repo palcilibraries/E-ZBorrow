@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Name>ReShare Client Search</Name>
+  <Author>Meredith Foster (VuFind Original: WFU ZSR)</Author>
+  <Version>0.4</Version>
+  <Active>true</Active>
+  <Description>Performs a VuFind OPAC title search in ReShare.  Provides a button to push the request into the ReShare server addon's queue.</Description>
+  <Forms>
+    <Form>FormRequest</Form>
+  </Forms>
+  <Settings>
+    <Setting name="OPACURL" value="https://ezborrow.reshare.indexdata.com/" type="string">
+      <Description>The base URL for your ReShare public interface (before the Search parameter).</Description>
+    </Setting>
+    <Setting name="EnableQueue" value="false" type="boolean">
+      <Description>Check to enable the ability to push the request into the ReShare Server Addon queue.</Description>
+    </Setting>
+    <Setting name="Queue" value="Push-To-Reshare" type="string">
+      <Description>The queue in ILLiad that the ReShare Server addon watches.  Anything pushed to this queue will be sent to ReShare.</Description>
+    </Setting>
+  </Settings>
+  <Files>
+    <File>ReShareClient.lua</File>
+  </Files>
+</Configuration>
