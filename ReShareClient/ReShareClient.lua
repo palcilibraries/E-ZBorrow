@@ -12,6 +12,10 @@ local browser = nil;
 local ribbonPage = nil;
 local statusText = nil;
 
+local searchOCLC = nil;
+local searchISN = nil;
+local searchTitle = nil;
+
 searchForm.Form = nil;
 
 local Clipboard = luanet.import_type("System.Windows.Forms.Clipboard");
@@ -48,6 +52,11 @@ function Init()
         
         local openSystemBrowser = ribbonPage:CreateButton("Open in Browser", GetClientImage("OpenBrowser32"), "OpenSystemBrowser", "URL Handling");
         openSystemBrowser.BarButton.Enabled = true;
+
+        searchOCLC = ribbonPage:CreateButton("Perform OCLC Number Search", GetClientImage("WorldCat32"), "DoSearchOCLC", "Search Options");
+        searchISN = ribbonPage:CreateButton("Perform ISSN/ISBN Number Search", GetClientImage("Table32"), "DoSearchISN", "Search Options");
+        searchTitle = ribbonPage:CreateButton("Perform Title/Author Search", GetClientImage("History32"), "DoSearchTitle", "Search Options");
+        EnableSearchButtons();
         
         searchForm.Form:Show();
         -- browser:Show();
@@ -55,7 +64,32 @@ function Init()
     end
 end
 
--- ReShare only applies to loans at this time.  If they do ever support articles, uncomment and fix those blocks, and fix Init()
+function EnableSearchButtons()
+    -- Inefficient, we're doing these same data lookups a few places.
+    local oclcNumber = GetFieldValue("Transaction","ESPNumber");
+    if oclcNumber == "" then
+        searchOCLC.BarButton.Enabled = false;
+    else
+        searchOCLC.BarButton.Enabled = true;
+    end
+    
+    local isnNumber = GetFieldValue("Transaction","ISSN");
+    if isnNumber == "" then
+        searchISN.BarButton.Enabled = false;
+    else
+        searchISN.BarButton.Enabled = true;
+    end
+    
+    local searchLoanTitle = GetFieldValue("Transaction", "LoanTitle");
+    local searchAuthor = GetFieldValue("Transaction","LoanAuthor");
+    if searchLoanTitle == "" and searchAuthor == "" then
+        searchTitle.BarButton.Enabled = false;
+    else
+        searchTitle.BarButton.Enabled = true;
+    end
+end
+
+-- ReShare only applies to loans at this time.  If they do ever support articles, redo this function again, and fix Init()
 --
 -- Note:  The original VuFind search code did not properly UrlEncode the title, use the UrlEncoder in AtlasHelpers to safely perform this task.
 function DoSearch()
@@ -70,7 +104,10 @@ function DoSearch()
         return
     end
 
-    -- XXX ISSN, no ISBN search being performed
+    local isnStatus = DoSearchISN();
+    if isnStatus == true then
+        return
+    end
 
     DoSearchTitle(); -- returns true or false, but the return value is not needed here.
 end
@@ -81,6 +118,19 @@ function DoSearchOCLC()
         browser:Navigate(opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(oclcNumber) .. "&type=oclc_num");
         LogDebug("ReShare Addon: OCLC Number found in request, calling " .. opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(oclcNumber) .. "&type=oclc_num");
         statusText.Value = "Searching for OCLC Number: " .. oclcNumber;
+        return true;
+    else
+        return false;
+    end
+end
+
+function DoSearchISN()
+    local isnNumber = GetFieldValue("Transaction","ISSN"); -- This ILLiad field contains the ISBN OR ISSN, depending on what type of material is provided.
+    if isnNumber ~= "" then
+        -- This ISN search type is not a standard SOLR search index in VuFind, but is provided in ReShare as a combination of the isbn and issn indexes.
+        browser:Navigate(opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(isnNumber) .. "&type=ISN");
+        LogDebug("ReShare Addon: ISxN Number found in request, calling " .. opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(isnNumber) .. "&type=ISN");
+        statusText.Value = "Searching for ISxN Number: " .. isnNumber;
         return true;
     else
         return false;
@@ -105,11 +155,11 @@ function DoSearchTitle()
     end
     if searchYear ~= "" and #searchYear == 4 then -- Only do a search on a 4 digit year
         searchString = searchString .. "&lookfor0%5B%5D=" .. AtlasHelpers.UrlEncode(searchYear) .. "&type0%5B%5D=publishDate";
-        -- Just a year means nothing, don't search.
+        -- Just a year means nothing, don't search JUST for a year.
     end
     
     if foundOne == false then
-        LogDebug("ReShare Addon: No title, author, or publisher year found!");
+        LogDebug("ReShare Addon: No title or author found!");
         return false;
     end
     
