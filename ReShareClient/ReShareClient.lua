@@ -10,6 +10,7 @@ local interfaceManager = nil;
 local searchForm = {};
 local browser = nil;
 local ribbonPage = nil;
+local statusText = nil;
 
 searchForm.Form = nil;
 
@@ -25,6 +26,10 @@ function Init()
         LogDebug("ReShare Addon: Loan request type found, initializing Chromium search engine");
         interfaceManager = GetInterfaceManager();
         searchForm = interfaceManager:CreateForm("ReShare OPAC Search", "Script");
+        
+        -- A read only text box to display status information about your search
+        statusText = searchForm:CreateTextEdit("Status", "ReShare VuFind Search Status:");
+        statusText.ReadOnly = true;
         
         browser = searchForm:CreateBrowser("ReShare OPAC Search", "ReShare OPAC Search", "ReShare OPAC Search", "Chromium");
         -- browser.TextVisible = false; -- if needed
@@ -54,16 +59,64 @@ end
 --
 -- Note:  The original VuFind search code did not properly UrlEncode the title, use the UrlEncoder in AtlasHelpers to safely perform this task.
 function DoSearch()
-	searchLoanTitle = GetFieldValue("Transaction", "LoanTitle");
-	-- searchJournalTitle = GetFieldValue("Transaction", "PhotoJournalTitle");
-	if searchLoanTitle ~= "" then
-		-- browser:RegisterPageHandler("custom", "IsRecordPage", "RecordPage", false);
-		browser:Navigate(opacUrl .. "Search/Results?type=Title&submit=Find&lookfor=" .. AtlasHelpers.UrlEncode(searchLoanTitle));
-        LogDebug("ReShare Addon: Title found, calling " .. opacUrl .. "Search/Results?type=Title&submit=Find&lookfor=" .. AtlasHelpers.UrlEncode(searchLoanTitle));
-	-- elseif searchJournalTitle ~= "" then
-	--	browser:RegisterPageHandler("custom", "IsRecordPage", "RecordPage", false);
-	-- 	browser:Navigate(opacUrl .. "Search/Results?type=Title&submit=Find&lookfor=" .. AtlasHelpers.UrlEncode(searchJournalTitle));
-	end
+    -- Modified from the original VuFind version.  The ReShare server addon performs the search in this order.  If records are found, return; otherwise continue
+    -- to the next step.  If more than one record is found the next step will cancel trigger a rejection, so hopefully ReShare's shared catalog is properly deduped.
+    -- 1.  If an OCLC number is present in the request, use it.
+    -- 2.  If an ISSN is present in the request, use it.
+    -- 3.  Finally, perform a search using the title, author, and publication year.
+    
+    local oclcStatus = DoSearchOCLC();
+    if oclcStatus == true then
+        return
+    end
+
+    -- XXX ISSN, no ISBN search being performed
+
+    DoSearchTitle(); -- returns true or false, but the return value is not needed here.
+end
+
+function DoSearchOCLC()
+    local oclcNumber = GetFieldValue("Transaction","ESPNumber");
+    if oclcNumber ~= "" then
+        browser:Navigate(opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(oclcNumber) .. "&type=oclc_num");
+        LogDebug("ReShare Addon: OCLC Number found in request, calling " .. opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(oclcNumber) .. "&type=oclc_num");
+        statusText.Value = "Searching for OCLC Number: " .. oclcNumber;
+        return true;
+    else
+        return false;
+    end
+end
+
+function DoSearchTitle()
+    local searchLoanTitle = GetFieldValue("Transaction", "LoanTitle");
+    local searchAuthor = GetFieldValue("Transaction","LoanAuthor");
+    local searchYear = GetFieldValue("Transaction","LoanDate");
+    local foundOne = false;
+    
+    local searchString = opacUrl .. "Search/Results?join=AND"
+    
+    if searchLoanTitle ~= "" then
+        searchString = searchString .. "&lookfor0%5B%5D=" .. AtlasHelpers.UrlEncode(searchLoanTitle) .. "&type0%5B%5D=title";
+        foundOne = true;
+    end
+    if searchAuthor ~= "" then
+        searchString = searchString .. "&lookfor0%5B%5D=" .. AtlasHelpers.UrlEncode(searchAuthor) .. "&type0%5B%5D=author";
+        foundOne = true;
+    end
+    if searchYear ~= "" and #searchYear == 4 then -- Only do a search on a 4 digit year
+        searchString = searchString .. "&lookfor0%5B%5D=" .. AtlasHelpers.UrlEncode(searchYear) .. "&type0%5B%5D=publishDate";
+        -- Just a year means nothing, don't search.
+    end
+    
+    if foundOne == false then
+        LogDebug("ReShare Addon: No title, author, or publisher year found!");
+        return false;
+    end
+    
+    browser:Navigate(searchString);
+    LogDebug("ReShare Addon: title and/or author found, calling " .. searchString);
+    statusText.Value = "Searching for Title: " .. searchLoanTitle .. ", Author: " .. searchAuthor -- .. ", Year: " .. searchYear;
+    return true;
 end
 
 -- This callback doesn't work on the Chrome version of the browser control.  There's no DOM heirarchy like in the IE version.  To get a
