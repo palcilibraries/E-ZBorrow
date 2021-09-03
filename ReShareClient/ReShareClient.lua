@@ -10,7 +10,6 @@ local interfaceManager = nil;
 local searchForm = {};
 local browser = nil;
 local ribbonPage = nil;
-local statusText = nil;
 
 local searchOCLC = nil;
 local searchISN = nil;
@@ -32,8 +31,9 @@ function Init()
         searchForm = interfaceManager:CreateForm("ReShare OPAC Search", "Script");
         
         -- A read only text box to display status information about your search
-        statusText = searchForm:CreateTextEdit("Status", "ReShare VuFind Search Status:");
-        statusText.ReadOnly = true;
+        --statusText = searchForm:CreateTextEdit("Status", "ReShare VuFind Search Status:");
+        --statusText.ReadOnly = true;
+        -- This method didn't work well, didn't see a way to format the control where it wasn't blocking off a large section to the left.
         
         browser = searchForm:CreateBrowser("ReShare OPAC Search", "ReShare OPAC Search", "ReShare OPAC Search", "Chromium");
         -- browser.TextVisible = false; -- if needed
@@ -117,7 +117,7 @@ function DoSearchOCLC()
     if oclcNumber ~= "" then
         browser:Navigate(opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(oclcNumber) .. "&type=oclc_num");
         LogDebug("ReShare Addon: OCLC Number found in request, calling " .. opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(oclcNumber) .. "&type=oclc_num");
-        statusText.Value = "Searching for OCLC Number: " .. oclcNumber;
+        searchForm.Form.Text = "ReShare Search - OCLC Number";
         return true;
     else
         return false;
@@ -130,7 +130,7 @@ function DoSearchISN()
         -- This ISN search type is not a standard SOLR search index in VuFind, but is provided in ReShare as a combination of the isbn and issn indexes.
         browser:Navigate(opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(isnNumber) .. "&type=ISN");
         LogDebug("ReShare Addon: ISxN Number found in request, calling " .. opacUrl .. "Search/Results?lookfor=" .. AtlasHelpers.UrlEncode(isnNumber) .. "&type=ISN");
-        statusText.Value = "Searching for ISxN Number: " .. isnNumber;
+        searchForm.Form.Text = "ReShare Search - ISxN Number";
         return true;
     else
         return false;
@@ -165,7 +165,7 @@ function DoSearchTitle()
     
     browser:Navigate(searchString);
     LogDebug("ReShare Addon: title and/or author found, calling " .. searchString);
-    statusText.Value = "Searching for Title: " .. searchLoanTitle .. ", Author: " .. searchAuthor -- .. ", Year: " .. searchYear;
+    searchForm.Form.Text = "ReShare Search - Title/Author";
     return true;
 end
 
